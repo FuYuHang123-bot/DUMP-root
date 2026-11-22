@@ -1,0 +1,20 @@
+# 统一换行符：源码在仓库内一律 LF，避免相同内容因 CRLF 产生不同 blob 对象。
+# 这样在 Windows / Linux / CI 上算出的 blob SHA 一致，校验脚本与本地协作不会误判为"文件被改过"。
+* text=auto eol=lf
+
+*.cs        text diff=csharp
+*.xaml      text
+*.csproj    text
+*.wxs       text
+*.json      text
+*.md        text
+*.ps1       text eol=crlf
+*.yml       text
+*.gitignore text
+
+# 二进制：不做任何换行符转换，也不做文本 diff
+*.png  binary
+*.ico  binary
+*.exe  binary
+*.dll  binary
+*.msi  binary

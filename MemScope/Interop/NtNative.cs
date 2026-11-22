@@ -22,9 +22,12 @@ internal static class NtNative
     [DllImport("ntdll.dll")]
     public static extern int NtQueryObject(IntPtr handle, int cls, IntPtr info, int len, out int retLen);
 
+#if MEMSCOPE_ADVANCED
+    /// <summary>线程遍历仅服务高级终止路径（APC 投递），标准构建不编译。</summary>
     [DllImport("ntdll.dll")]
     public static extern int NtGetNextThread(IntPtr processHandle, IntPtr threadHandle, uint desiredAccess,
         uint handleAttributes, uint flags, out IntPtr newThreadHandle);
+#endif
 
     [DllImport("ntdll.dll")]
     public static extern int NtSuspendProcess(IntPtr processHandle);

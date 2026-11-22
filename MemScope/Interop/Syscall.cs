@@ -372,9 +372,6 @@ internal static class Syscall
     public static int QueryObject(IntPtr handle, int cls, IntPtr info, int len, out int retLen)
         => NtNative.NtQueryObject(handle, cls, info, len, out retLen);
 
-    public static int GetNextThread(IntPtr process, IntPtr thread, uint access, out IntPtr next)
-        => NtNative.NtGetNextThread(process, thread, access, 0, 0, out next);
-
     public static int SuspendProcess(IntPtr process) => NtNative.NtSuspendProcess(process);
 
     public static int ResumeProcess(IntPtr process) => NtNative.NtResumeProcess(process);

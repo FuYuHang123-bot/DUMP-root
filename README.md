@@ -1,10 +1,17 @@
 # MemScope · 内存与文件实时观测台
 
+[![build](https://github.com/FuYuHang123-bot/DUMP-root/actions/workflows/build.yml/badge.svg)](https://github.com/FuYuHang123-bot/DUMP-root/actions/workflows/build.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4.svg)](#1-用途与边界)
+
 > Windows 进程诊断工具：实时观察进程、已加载模块、虚拟内存区域与真正打开的文件句柄；可把模块在内存中的映像还原成结构合法、能被 IDA / dumpbin / PE 工具直接打开的磁盘文件。
+
+![MemScope 主界面](docs/screenshots/main-light.png)
 
 - 目标框架 `net10.0-windows`（x64），零第三方依赖，纯 WPF + P/Invoke
 - 需要 .NET 10 桌面运行时（框架依赖发布，约 750 KB）
 - 界面：浅色 / 深色双主题，双栏布局，日志常驻
+- 发布构建在**编译期**剔除直连系统调用与注入路径，详见 [§4](#4-结束进程的分层路径) 与 [§10](#10-误报说明)
 
 ---
 
@@ -38,6 +45,15 @@
 | 状态栏 | 采样耗时、最后导出时间 |
 
 主题令牌集中在 `Assets/Theme.Light.xaml` / `Theme.Dark.xaml`，切换是热替换资源字典，控件树不重建。
+
+| 内存区域页签 | 设置面板 |
+|---|---|
+| ![内存区域](docs/screenshots/regions-light.png) | ![设置面板](docs/screenshots/settings-light.png) |
+
+深色主题：
+
+![深色主题](docs/screenshots/main-dark.png)
+
 
 采样全部在后台线程完成，UI 线程只做差量更新（PID 复用用 `CreateTime` 做 key），1 秒刷新下界面不卡。
 
@@ -157,11 +173,14 @@ dotnet publish MemScope/MemScope.csproj -c Release -r win-x64 --self-contained f
 
 # 打包 MSI（WiX 5；每用户安装，不请求管理员权限）
 dotnet tool install --global wix --version 5.*
-wix build installer/Package.wxs -arch x64 -o dist/installer/MemScope-1.0.0-x64.msi
+wix build installer/Package.wxs -arch x64 -o dist/installer/MemScope-1.0.1-x64.msi
 
 # 代码签名（自签名证书，需先导入 Cert:\LocalMachine\My）
 signtool sign /sm /s My /sha1 <证书指纹> /fd SHA256 /td SHA256 ^
-  /tr http://timestamp.digicert.com dist\MemScope\MemScope.exe dist\MemScope\MemScope.dll dist\installer\MemScope-1.0.0-x64.msi
+  /tr http://timestamp.digicert.com dist\MemScope\MemScope.exe dist\MemScope\MemScope.dll dist\installer\MemScope-1.0.1-x64.msi
+
+# 发布门禁：校验产物不含直连系统调用与远程执行特征（CI 与本机共用同一份脚本）
+powershell -File scripts/verify-standard-build.ps1 -Path dist/MemScope/MemScope.dll
 
 # 引擎自检：进程 / 内存 / 句柄 / 终止 / 导出 / 模块提取 x64+x86 / 失败路径
 dotnet run --project MemScope.Cli -c Release
@@ -180,8 +199,13 @@ dist/MemScope/MemScope.exe --bench <PID> <模块名> [次数] [--dir <输出目�
 ```
 
 > 标准构建与完整功能构建的差异只体现在**编译产物**上：标准构建的 `MemScope.dll` 中
-> `NtCreateThreadEx`、`NtQueueApcThread`、`VirtualAlloc`、`VirtualProtect`、
-> `RtlExitUserProcess` 均为零命中，也不存在 `4C 8B D1 B8` 调用桩字节序列。
+> `NtCreateThreadEx`、`NtQueueApcThread`、`NtGetNextThread`、`VirtualAlloc`、`VirtualProtect`、
+> `RtlExitUserProcess` 均为零命中，也不存在 `4C 8B D1 B8` 调用桩字节序列，PE 节区不含可写可执行段。
+> 这条约束由 `scripts/verify-standard-build.ps1` 固化，CI 每次提交都会跑一遍——只靠人记着，早晚会漏。
+>
+> 持续集成：`.github/workflows/build.yml` 在 Windows 上并行构建标准版与完整功能版，
+> 对标准版执行上述门禁并归档发布件；完整功能版只做编译验证，确保隔离改动不会悄悄弄坏它。
+
 
 ## 8. 目录
 
@@ -204,6 +228,10 @@ MemScope/                  主程序（WPF）
 MemScope.Cli/             控制台自检（无界面验证引擎全链路）
 MemScope.UiTest/          UI 自检（离屏渲染 + 截图 + 交互链路）
 installer/Package.wxs      MSI 安装包定义（WiX）
+scripts/                  构建门禁：发布件特征校验
+.github/workflows/        持续集成（双配置构建 + 门禁）
+docs/screenshots/         界面截图
+CHANGELOG.md              变更记录
 ```
 
 ## 9. 已知限制
@@ -230,6 +258,6 @@ installer/Package.wxs      MSI 安装包定义（WiX）
 
 ## 11. 许可
 
-MIT License，见 [LICENSE](LICENSE)。
+MIT License，见 [LICENSE](LICENSE)。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 使用本工具处理他人系统上的进程时，请确认你已获得授权。

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  MemScope 安装包定义（WiX v4+ 语法，用 WiX 7 构建）
+  MemScope 安装包定义（WiX v4+ 语法，用 WiX 5 构建；WiX 6 起需接受 OSMF 收费协议）
 
   设计取舍：
   - 每用户安装（Scope="perUser"）：装到 %LOCALAPPDATA%\Programs\MemScope，
@@ -13,7 +13,7 @@
 
   <Package Name="MemScope 内存与文件实时观测台"
            Manufacturer="MemScope"
-           Version="1.0.0.0"
+           Version="1.0.1.0"
            UpgradeCode="F541D6C1-85C2-4314-9B5A-5CCA7CCF936B"
            Scope="perUser"
            Compressed="yes"

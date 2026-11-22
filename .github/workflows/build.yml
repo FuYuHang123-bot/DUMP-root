@@ -1,0 +1,76 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standard:
+    name: 标准构建（对外发布）
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: 构建标准版
+        run: dotnet build MemScope/MemScope.csproj -c Release -v minimal --nologo
+
+      - name: 构建命令行自检工具
+        run: dotnet build MemScope.Cli/MemScope.Cli.csproj -c Release -v minimal --nologo
+
+      - name: 构建界面离屏校验工程
+        run: dotnet build MemScope.UiTest/MemScope.UiTest.csproj -c Release -v minimal --nologo
+
+      # 门禁：发布件一旦重新引入直连系统调用或远程执行能力，这里直接失败
+      - name: 校验发布件不含直连系统调用与远程执行特征
+        shell: pwsh
+        run: ./scripts/verify-standard-build.ps1 -Path MemScope/bin/Release/net10.0-windows/MemScope.dll
+
+      - name: 发布（框架依赖，目录版）
+        run: >
+          dotnet publish MemScope/MemScope.csproj -c Release
+          -r win-x64 --self-contained false
+          -p:PublishReadyToRun=false
+          -o out/publish
+
+      - name: 归档发布件
+        uses: actions/upload-artifact@v4
+        with:
+          name: MemScope-win-x64-standard
+          path: out/publish
+          if-no-files-found: error
+
+  advanced:
+    name: 高级构建（编译验证）
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # 高级配置不进发布件，但必须保证它随时能编过——否则改动标准构建时会悄悄弄坏本地版本
+      - name: 构建完整功能版
+        run: >
+          dotnet build MemScope/MemScope.csproj -c Release
+          -p:EnableAdvanced=true -v minimal --nologo
+          -o out/advanced
