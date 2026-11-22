@@ -1,0 +1,492 @@
+<Window x:Class="MemScope.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Icon="Assets/memscope.ico" Title="MemScope · 内存与文件实时观测台"
+        Height="860" Width="1360" MinHeight="600" MinWidth="1120"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource BgBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="Microsoft YaHei UI, Segoe UI"
+        FontSize="11.5"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ================= 工具栏 ================= -->
+        <Border Grid.Row="0" Background="{DynamicResource ToolbarBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid Height="46" Margin="12,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 标识 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource AccentBrush}">
+                        <TextBlock Text="M" Foreground="White" FontWeight="Bold" FontSize="12"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="MemScope" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- 搜索 + 采样控制 -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
+                    <Grid Width="228">
+                        <TextBox x:Name="TxtSearch" Style="{StaticResource Input}" TextChanged="TxtSearch_TextChanged"/>
+                        <TextBlock Text="搜索进程名 / PID / 路径" Margin="9,0,0,0" IsHitTestVisible="False"
+                                   VerticalAlignment="Center" FontSize="11.5"
+                                   Foreground="{DynamicResource TextFaintBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=TxtSearch}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+
+                    <Button x:Name="BtnInterval" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Width="58"
+                            Content="1.0s" Click="BtnInterval_Click"
+                            ToolTip="刷新间隔：点击在 0.5 / 1 / 2 / 5 秒之间切换"/>
+
+                    <Button x:Name="BtnPause" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Width="48"
+                            Content="暂停" Click="BtnPause_Click" ToolTip="暂停 / 恢复实时采样"/>
+                </StackPanel>
+
+                <!-- 右侧操作 -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border x:Name="ChipPrivilege" CornerRadius="4" Padding="7,3" Margin="0,0,10,0"
+                            Background="{DynamicResource OkSoftBrush}" VerticalAlignment="Center"
+                            Cursor="Hand" MouseLeftButtonUp="ChipPrivilege_Click"
+                            ToolTip="点击以管理员身份重启（SeDebugPrivilege 需要管理员权限）">
+                        <TextBlock x:Name="LblPrivilege" Text="检测权限…" FontSize="10.5"
+                                   Foreground="{DynamicResource OkBrush}"/>
+                    </Border>
+
+                    <Button x:Name="BtnExport" Style="{StaticResource BtnGhost}" Content="导出快照"
+                            Click="BtnExport_Click" ToolTip="把当前所有进程快照导出为 CSV + JSON"/>
+
+                    <ToggleButton x:Name="TglAutoExport" Style="{StaticResource ToggleChip}" Margin="6,0,0,0"
+                                  Width="102" Padding="0"
+                                  Content="实时导出" Click="TglAutoExport_Click"
+                                  ToolTip="按间隔持续落盘快照，并自动滚动清理历史文件"/>
+
+                    <Button x:Name="BtnOpenFolder" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Width="42"
+                            Content="目录" Padding="0" Click="BtnOpenFolder_Click" ToolTip="打开导出目录"/>
+
+                    <Button x:Name="BtnTheme" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Width="52"
+                            Content="深色" Padding="0" Click="BtnTheme_Click"
+                            ToolTip="切换浅色 / 深色主题（会记住选择）"/>
+
+                    <Button x:Name="BtnSettings" Style="{StaticResource BtnGhost}" Margin="6,0,0,0" Width="52"
+                            Content="设置" Padding="0" Click="BtnSettings_Click"
+                            ToolTip="高级终止开关、提取默认值与输出目录"/>
+
+                    <Border Width="1" Height="18" Background="{DynamicResource BorderBrush}" Margin="10,0"/>
+
+                    <Button x:Name="BtnKill" Style="{StaticResource BtnDanger}" Content="强制结束"
+                            Click="BtnKill_Click"
+                            ToolTip="分层终止：标准模式只用 TerminateProcess；开启高级终止后追加直连系统调用与远程线程"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ================= 主区域 ================= -->
+        <Grid Grid.Row="1" Margin="10,10,10,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="58*" MinWidth="520"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="42*" MinWidth="380"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ===== 进程列表 ===== -->
+            <Border Grid.Column="0" Background="{DynamicResource CardBrush}" CornerRadius="6"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="34"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="10,0,10,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="进程" Style="{StaticResource SectionTitle}"/>
+                            <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="3"
+                                    Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="LblProcCount" Text="—" FontSize="10"
+                                           Foreground="{DynamicResource AccentBrush}"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock x:Name="LblProcSummary" Style="{StaticResource Hint}" HorizontalAlignment="Right"
+                                   Text="列头可排序 · 双击定位文件"/>
+                    </Grid>
+
+                    <DataGrid x:Name="ProcessGrid" Grid.Row="1" Style="{StaticResource FlatGrid}"
+                              SelectionChanged="ProcessGrid_SelectionChanged"
+                              MouseDoubleClick="ProcessGrid_MouseDoubleClick"
+                              BorderThickness="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="进程名" Width="172" Binding="{Binding Name}" SortMemberPath="Name">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                        <Setter Property="ToolTip" Value="{Binding Name}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="PID" Width="54" Binding="{Binding Pid}" SortMemberPath="Pid"
+                                                ElementStyle="{StaticResource NumCell}" HeaderStyle="{StaticResource NumHeader}"/>
+                            <DataGridTextColumn Header="CPU%" Width="60" Binding="{Binding Cpu, StringFormat={}{0:N1}}"
+                                                SortMemberPath="Cpu" ElementStyle="{StaticResource NumCell}"
+                                                HeaderStyle="{StaticResource NumHeader}"/>
+                            <DataGridTextColumn Header="工作集" Width="72" Binding="{Binding WorkingSetMb, StringFormat={}{0:N1}}"
+                                                SortMemberPath="WorkingSetMb" ElementStyle="{StaticResource NumCell}"
+                                                HeaderStyle="{StaticResource NumHeader}"/>
+                            <DataGridTextColumn Header="私有" Width="66" Binding="{Binding PrivateMb, StringFormat={}{0:N1}}"
+                                                SortMemberPath="PrivateMb" ElementStyle="{StaticResource NumCell}"
+                                                HeaderStyle="{StaticResource NumHeader}"/>
+                            <DataGridTextColumn Header="线程" Width="42" Binding="{Binding Threads}" SortMemberPath="Threads"
+                                                ElementStyle="{StaticResource NumCell}" HeaderStyle="{StaticResource NumHeader}"/>
+                            <DataGridTextColumn Header="句柄" Width="42" Binding="{Binding Handles}" SortMemberPath="Handles"
+                                                ElementStyle="{StaticResource NumCell}" HeaderStyle="{StaticResource NumHeader}"/>
+                            <DataGridTextColumn Header="路径" Width="*" Binding="{Binding PathDisplay}" SortMemberPath="Path">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="FontSize" Value="10.5"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}"/>
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                        <Setter Property="ToolTip" Value="{Binding Path}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent"
+                          ResizeBehavior="PreviousAndNext"/>
+
+            <!-- ===== 详情 ===== -->
+            <Border Grid.Column="2" Background="{DynamicResource CardBrush}" CornerRadius="6"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 标题 -->
+                    <Grid Grid.Row="0" Margin="12,9,10,0">
+                        <TextBlock x:Name="LblProcTitle" Text="未选择进程" FontWeight="SemiBold" FontSize="13"
+                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <ToggleButton x:Name="TglFollow" Style="{StaticResource ToggleChip}" HorizontalAlignment="Right"
+                                      Height="24" Padding="8,0" FontSize="10.5" Content="随刷新" IsChecked="True"
+                                      ToolTip="勾选后详情面板跟随实时采样一起刷新"/>
+                    </Grid>
+
+                    <!-- 指标条 -->
+                    <Border Grid.Row="1" Margin="12,8,12,0" Padding="0,7"
+                            Background="{DynamicResource InsetBrush}" CornerRadius="4"
+                            BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0.9*"/>
+                                <ColumnDefinition Width="1.1*"/>
+                                <ColumnDefinition Width="1.1*"/>
+                                <ColumnDefinition Width="0.8*"/>
+                                <ColumnDefinition Width="0.8*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="9,0,0,0">
+                                <TextBlock Text="PID" Style="{StaticResource StatLabel}"/>
+                                <TextBlock x:Name="LblStatPid" Text="—" Style="{StaticResource StatValue}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="9,0,0,0">
+                                <TextBlock Text="工作集" Style="{StaticResource StatLabel}"/>
+                                <TextBlock x:Name="LblStatWs" Text="—" Style="{StaticResource StatValue}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Margin="9,0,0,0">
+                                <TextBlock Text="私有" Style="{StaticResource StatLabel}"/>
+                                <TextBlock x:Name="LblStatPriv" Text="—" Style="{StaticResource StatValue}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" Margin="9,0,0,0">
+                                <TextBlock Text="线程" Style="{StaticResource StatLabel}"/>
+                                <TextBlock x:Name="LblStatThreads" Text="—" Style="{StaticResource StatValue}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="4" Margin="9,0,0,0">
+                                <TextBlock Text="句柄" Style="{StaticResource StatLabel}"/>
+                                <TextBlock x:Name="LblStatHandles" Text="—" Style="{StaticResource StatValue}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 路径 -->
+                    <TextBlock x:Name="LblStatPath" Grid.Row="2" Text="选择一行查看其内存与已加载文件"
+                               Margin="13,6,12,6" FontSize="10.5" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                               Foreground="{DynamicResource TextDimBrush}"/>
+
+                    <TabControl x:Name="DetailTabs" Grid.Row="3" Style="{StaticResource DetailTabs}" Margin="0,0,0,2">
+                        <!-- 模块 -->
+                        <TabItem Header="文件与模块">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="10,5,8,5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="LblModuleInfo" Text="—" Style="{StaticResource Hint}"
+                                               Margin="0,0,8,0"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <CheckBox x:Name="ChkFreeze" Content="冻结提取" Margin="0,0,8,0"
+                                                  Checked="ChkFreeze_Changed" Unchecked="ChkFreeze_Changed"
+                                                  ToolTip="提取期间用 NtSuspendProcess 冻结目标进程，拿到一致的内存快照；完成后立即恢复"/>
+                                        <Button x:Name="BtnDumpModule" Content="提取所选" Style="{StaticResource BtnGhost}"
+                                                Height="22" Padding="8,0" FontSize="10.5" Margin="0,0,6,0"
+                                                Click="BtnDumpModule_Click"
+                                                ToolTip="把选中的模块从进程内存还原成磁盘上的 PE 文件（双击模块行等效）"/>
+                                        <Button x:Name="BtnDumpAll" Content="全部" Style="{StaticResource BtnGhost}"
+                                                Height="22" Padding="8,0" FontSize="10.5"
+                                                Click="BtnDumpAll_Click"
+                                                ToolTip="把该进程所有已加载模块逐个提取"/>
+                                    </StackPanel>
+                                </Grid>
+                                <DataGrid x:Name="ModuleGrid" Grid.Row="1" Style="{StaticResource FlatGrid}"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          MouseDoubleClick="ModuleGrid_MouseDoubleClick"
+                                          PreviewMouseRightButtonDown="ModuleGrid_PreviewMouseRightButtonDown">
+                                    <DataGrid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="提取该模块的二进制" Click="MenuDumpModule_Click"/>
+                                            <MenuItem Header="复制文件路径" Click="MenuCopyModulePath_Click"/>
+                                            <MenuItem Header="在资源管理器中定位" Click="MenuLocateModule_Click"/>
+                                        </ContextMenu>
+                                    </DataGrid.ContextMenu>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="模块" Width="136" Binding="{Binding Name}">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding Name}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTextColumn Header="大小" Width="66" Binding="{Binding SizeDisplay}"
+                                                            ElementStyle="{StaticResource NumCell}" HeaderStyle="{StaticResource NumHeader}"/>
+                                        <DataGridTextColumn Header="基址" Width="108" Binding="{Binding BaseHex}"
+                                                            ElementStyle="{StaticResource NumCell}"/>
+                                        <DataGridTextColumn Header="文件路径" Width="*" Binding="{Binding Path}">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                    <Setter Property="FontSize" Value="10.5"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}"/>
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding Path}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- 内存区域 -->
+                        <TabItem Header="内存区域">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock x:Name="LblRegionInfo" Grid.Row="0" Text="—" Margin="10,5,8,5"
+                                           Style="{StaticResource Hint}"/>
+                                <DataGrid x:Name="RegionGrid" Grid.Row="1" Style="{StaticResource FlatGrid}"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          PreviewMouseRightButtonDown="RegionGrid_PreviewMouseRightButtonDown">
+                                    <DataGrid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="转储该区域为 .bin" Click="MenuDumpRegion_Click"/>
+                                        </ContextMenu>
+                                    </DataGrid.ContextMenu>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="基址" Width="108" Binding="{Binding BaseHex}"
+                                                            ElementStyle="{StaticResource NumCell}"/>
+                                        <DataGridTextColumn Header="大小" Width="68" Binding="{Binding SizeDisplay}"
+                                                            ElementStyle="{StaticResource NumCell}" HeaderStyle="{StaticResource NumHeader}"/>
+                                        <DataGridTextColumn Header="状态" Width="54" Binding="{Binding State}"/>
+                                        <DataGridTextColumn Header="类型" Width="44" Binding="{Binding Type}"/>
+                                        <DataGridTextColumn Header="保护" Width="96" Binding="{Binding Protect}">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding Summary}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTextColumn Header="映射文件" Width="*" Binding="{Binding FileDisplay}">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                    <Setter Property="FontSize" Value="10.5"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}"/>
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding File}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- 打开的文件 -->
+                        <TabItem Header="文件句柄">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock x:Name="LblHandleInfo" Grid.Row="0" Text="—" Margin="10,5,8,5"
+                                           Style="{StaticResource Hint}"/>
+                                <DataGrid x:Name="HandleGrid" Grid.Row="1" Style="{StaticResource FlatGrid}"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="文件名" Width="132" Binding="{Binding Name}">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding Name}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTextColumn Header="访问" Width="88" Binding="{Binding AccessHex}"
+                                                            ElementStyle="{StaticResource NumCell}"
+                                                            HeaderStyle="{StaticResource NumHeader}"/>
+                                        <DataGridTextColumn Header="完整路径" Width="*" Binding="{Binding Path}">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                    <Setter Property="FontSize" Value="10.5"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}"/>
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding Path}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </TabItem>
+                    </TabControl>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ================= 日志 ================= -->
+        <Border Grid.Row="2" Background="{DynamicResource CardBrush}" CornerRadius="6" Margin="10,0,10,6"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="26"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Margin="10,0,8,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="操作日志" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock x:Name="LblLogCount" Text="0 条" Style="{StaticResource Hint}" Margin="7,0,0,0"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock x:Name="LblHandleDiag" Text="" FontSize="10"
+                                   Foreground="{DynamicResource TextFaintBrush}" Margin="0,0,10,0"
+                                   VerticalAlignment="Center"/>
+                        <Button x:Name="BtnClearLog" Content="清空" Style="{StaticResource BtnGhost}"
+                                Height="20" Padding="7,0" FontSize="10" Click="BtnClearLog_Click"/>
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="1" Background="{DynamicResource LogBgBrush}" CornerRadius="0,0,5,5"
+                        BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="0,1,0,0">
+                    <ScrollViewer x:Name="LogScroll" Height="94" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled" Padding="10,4,20,5">
+                        <ItemsControl x:Name="LogList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="56"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Time}" FontFamily="Consolas" FontSize="10"
+                                                   Foreground="{DynamicResource TextFaintBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="10.5"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Text}"
+                                                   Foreground="{DynamicResource TextDimBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Kind}" Value="err">
+                                                            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Kind}" Value="ok">
+                                                            <Setter Property="Foreground" Value="{DynamicResource OkBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ================= 状态栏 ================= -->
+        <Border Grid.Row="3" Background="{DynamicResource ToolbarBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Height="24">
+            <Grid Margin="12,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="LblStatus" Text="就绪" FontSize="10.5" Grid.Column="0"
+                           Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Center"/>
+                <TextBlock x:Name="LblExportStatus" Text="" FontSize="10.5" Grid.Column="2"
+                           MaxWidth="520" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFaintBrush}" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

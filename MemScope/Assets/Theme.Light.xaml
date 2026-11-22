@@ -1,0 +1,29 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ===== MemScope 浅色主题 ===== -->
+    <SolidColorBrush x:Key="BgBrush" Color="#EDF0F5"/>
+    <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ToolbarBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BorderBrush" Color="#DCE2EA"/>
+    <SolidColorBrush x:Key="BorderSoftBrush" Color="#E9EDF3"/>
+    <SolidColorBrush x:Key="TextBrush" Color="#16202B"/>
+    <SolidColorBrush x:Key="TextDimBrush" Color="#5C6875"/>
+    <SolidColorBrush x:Key="TextFaintBrush" Color="#8E99A6"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#1F6FEB"/>
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#E8F0FE"/>
+    <SolidColorBrush x:Key="HoverBrush" Color="#F2F6FD"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="#D64545"/>
+    <SolidColorBrush x:Key="DangerSoftBrush" Color="#FCEDED"/>
+    <SolidColorBrush x:Key="OkBrush" Color="#0E9F6E"/>
+    <SolidColorBrush x:Key="OkSoftBrush" Color="#E7F7F1"/>
+    <SolidColorBrush x:Key="WarnBrush" Color="#B45309"/>
+    <SolidColorBrush x:Key="RowAltBrush" Color="#F6F8FC"/>
+    <SolidColorBrush x:Key="SelectionBrush" Color="#DCE8FB"/>
+    <SolidColorBrush x:Key="InsetBrush" Color="#F6F8FC"/>
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#C6CFDB"/>
+    <SolidColorBrush x:Key="HeaderBgBrush" Color="#F5F8FC"/>
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C7D0DC"/>
+    <SolidColorBrush x:Key="LogBgBrush" Color="#FBFCFE"/>
+
+</ResourceDictionary>

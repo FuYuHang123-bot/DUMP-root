@@ -1,0 +1,12 @@
+# 编译输出
+bin/
+obj/
+*.pdb
+*.user
+
+# 发布与实测产物：含真实进程内存转储，严禁入库
+dist/
+sample-dump/
+
+# 本地工具记录
+.workbuddy/

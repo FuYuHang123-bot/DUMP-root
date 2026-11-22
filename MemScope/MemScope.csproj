@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>MemScope</AssemblyName>
+    <ApplicationIcon>Assets\memscope.ico</ApplicationIcon>
+    <RootNamespace>MemScope</RootNamespace>
+    <StartupObject>MemScope.Program</StartupObject>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyTitle>MemScope 内存与文件实时观测台</AssemblyTitle>
+    <Product>MemScope 内存与文件实时观测台</Product>
+    <Company>MemScope</Company>
+    <Description>进程内存与文件句柄实时观测、模块二进制提取工具</Description>
+    <Copyright>Copyright © 2026 MemScope</Copyright>
+    <NeutralLanguage>zh-Hans</NeutralLanguage>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\memscope.ico" />
+  </ItemGroup>
+
+</Project>
