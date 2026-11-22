@@ -23,7 +23,7 @@
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,13">
             <StackPanel>
                 <TextBlock Text="设置" FontSize="14" FontWeight="SemiBold"/>
-                <TextBlock Text="默认配置面向「不被安全软件误判」，激进能力需要显式开启"
+                <TextBlock Text="只使用常规系统调用；提取产物与 sha256 一并写入导出目录"
                            FontSize="10.5" Margin="0,3,0,0"
                            Foreground="{DynamicResource TextDimBrush}"/>
             </StackPanel>

@@ -64,7 +64,9 @@
 | L0 | 启用 `SeDebugPrivilege`（`RtlAdjustPrivilege`，失败回退 `AdjustTokenPrivileges`） |
 | L1 | `kernel32!TerminateProcess` |
 
-**高级模式（设置中显式开启，`--advanced` 可临时启用）**
+**完整功能构建（仅本地使用，`-p:EnableAdvanced=true`）**
+
+以下三层**不参与标准发布构建的编译**，通过 `MEMSCOPE_ADVANCED` 条件编译隔离，发布件中既没有调用桩也没有注入相关导入。
 
 | 层 | 手段 |
 |---|---|
@@ -72,11 +74,11 @@
 | L3 | `NtCreateThreadEx` 在目标进程内执行 `RtlExitUserProcess`（ntdll 由 KnownDlls 共享映射，跨进程同址） |
 | L4 | `NtGetNextThread` 遍历线程 → `NtQueueApcThread` 投递退出 APC → 恢复线程 |
 
-调用序列只落在可执行只读页：先以 `PAGE_READWRITE` 写入，随即 `VirtualProtect` 收紧为 `PAGE_EXECUTE_READ`，所有序列共用同一张 4 KB 页，进程内不存在 RWX 页。
+该构建下调用序列只落在可执行只读页：先以 `PAGE_READWRITE` 写入，随即 `VirtualProtect` 收紧为 `PAGE_EXECUTE_READ`，所有序列共用同一张 4 KB 页，进程内不存在 RWX 页。
 
-**为什么默认关闭高级模式**
+**为什么这批能力不进发布构建**
 
-拦截进程终止主要是内核回调 `ObRegisterCallbacks` 在做——它在 `OpenProcess` 阶段就把 `PROCESS_TERMINATE` 从句柄权限里剥掉，这与用户态走哪条调用路径无关，直连系统调用同样返回 `0xC0000022`。用户态 Hook 只影响少数场景，收益有限；而「解析系统调用号 + 自建可执行页 + 远程线程」这套动作在行为分析中与内存注入的特征高度重合，代价是实打实的。所以它默认关闭，需要时明确开启。
+拦截进程终止主要是内核回调 `ObRegisterCallbacks` 在做——它在 `OpenProcess` 阶段就把 `PROCESS_TERMINATE` 从句柄权限里剥掉，这与用户态走哪条调用路径无关，直连系统调用同样返回 `0xC0000022`。用户态 Hook 只影响少数场景，收益有限；而「解析系统调用号 + 自建可执行页 + 远程线程」这套动作在行为分析中与内存注入的特征高度重合，代价是实打实的。因此它在源码层面就与发布构建分离，不靠运行时开关兜底。
 
 **做不到的部分**
 
@@ -144,10 +146,22 @@ x86（WOW64）分支用 32 位 `kernel32.dll` 验证：`.text` 有 17,260 字节
 ## 7. 构建与自检
 
 ```bash
+# 标准构建（对外发布用）：不含直连系统调用与注入路径，相关代码在编译期剔除
 dotnet build MemScope/MemScope.csproj -c Release
+
+# 完整功能构建（仅本地使用）：多定义 MEMSCOPE_ADVANCED，启用直连系统调用与远程线程/APC
+dotnet build MemScope/MemScope.csproj -c Release -p:EnableAdvanced=true
 
 # 发布（目录版，多文件）
 dotnet publish MemScope/MemScope.csproj -c Release -r win-x64 --self-contained false -o dist/MemScope
+
+# 打包 MSI（WiX 5；每用户安装，不请求管理员权限）
+dotnet tool install --global wix --version 5.*
+wix build installer/Package.wxs -arch x64 -o dist/installer/MemScope-1.0.0-x64.msi
+
+# 代码签名（自签名证书，需先导入 Cert:\LocalMachine\My）
+signtool sign /sm /s My /sha1 <证书指纹> /fd SHA256 /td SHA256 ^
+  /tr http://timestamp.digicert.com dist\MemScope\MemScope.exe dist\MemScope\MemScope.dll dist\installer\MemScope-1.0.0-x64.msi
 
 # 引擎自检：进程 / 内存 / 句柄 / 终止 / 导出 / 模块提取 x64+x86 / 失败路径
 dotnet run --project MemScope.Cli -c Release
@@ -165,12 +179,17 @@ dist/MemScope/MemScope.exe --dump <PID> <模块名> [--dir <输出目录>]
 dist/MemScope/MemScope.exe --bench <PID> <模块名> [次数] [--dir <输出目录>]
 ```
 
+> 标准构建与完整功能构建的差异只体现在**编译产物**上：标准构建的 `MemScope.dll` 中
+> `NtCreateThreadEx`、`NtQueueApcThread`、`VirtualAlloc`、`VirtualProtect`、
+> `RtlExitUserProcess` 均为零命中，也不存在 `4C 8B D1 B8` 调用桩字节序列。
+
 ## 8. 目录
 
 ```
 MemScope/                  主程序（WPF）
   Interop/NativeMethods.cs   P/Invoke 与结构体定义
-  Interop/Syscall.cs         ntdll 导出表解析与调用序列
+  Interop/NtNative.cs        ntdll 常规导出直调（标准路径）
+  Interop/Syscall.cs         直连系统调用层（仅 EnableAdvanced 构建编译）
   Core/ProcessSnapshot.cs    进程全表采样
   Core/MemoryMapScanner.cs   虚拟内存区域 / 模块
   Core/HandleScanner.cs      文件句柄反查
@@ -184,6 +203,7 @@ MemScope/                  主程序（WPF）
   MainWindow.Dump.cs         提取相关交互
 MemScope.Cli/             控制台自检（无界面验证引擎全链路）
 MemScope.UiTest/          UI 自检（离屏渲染 + 截图 + 交互链路）
+installer/Package.wxs      MSI 安装包定义（WiX）
 ```
 
 ## 9. 已知限制
@@ -202,7 +222,9 @@ MemScope.UiTest/          UI 自检（离屏渲染 + 截图 + 交互链路）
 
 进程观察与内存提取类工具被安全软件标记，是这个品类的常态——读其他进程内存、开高权限句柄、结束进程，这些动作同时也出现在恶意软件的早期阶段。
 
-当前发布件使用**自签名证书**（`CN=MemScope`，RSA 4096 / SHA-256 / RFC3161 时间戳）签名，仅对已把该根证书装入「受信任的根证书颁发机构」的机器有效；未安装的机器上证书链验证会失败，SmartScreen 仍会拦截。已提交受信任 CA 的代码签名申请，通过后会在 Release 中标注。
+发布构建已把最容易触发静态特征的部分**从编译产物中移除**：直连系统调用层（系统调用号解析、调用桩、`VirtualAlloc`/`VirtualProtect`）、远程线程与 APC 投递（`NtCreateThreadEx`/`NtQueueApcThread`）均不参与编译，`MemScope.dll` 中这几个符号零命中，也不存在 `4C 8B D1 B8` 桩字节。
+
+当前发布件使用**自签名证书**（`CN=MemScope`，RSA 4096 / SHA-256 / RFC3161 时间戳）签名，`MemScope.exe`、`MemScope.dll`、MSI 安装包三者均已签名。需要注意的是：仅对已把该根证书装入「受信任的根证书颁发机构」的机器有效，未安装的机器上证书链验证会失败，SmartScreen 仍会拦截。
 
 如果遇到误报，请把以下信息一起提交给厂商，有助于快速定位：文件 SHA-256、触发拦截的具体动作、Windows 版本与安全软件版本。恶意软件不会把完整源码、构建脚本和逐节比对报告一起公开，这是本项目最有说服力的证明。
 

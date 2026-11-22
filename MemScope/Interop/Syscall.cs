@@ -2,6 +2,8 @@ using System.Runtime.InteropServices;
 
 namespace MemScope.Interop;
 
+#if MEMSCOPE_ADVANCED
+
 /// <summary>
 /// 直接系统调用层（**仅在「高级终止」开启时使用**）。
 ///
@@ -12,6 +14,9 @@ namespace MemScope.Interop;
 /// 设计取舍：这条路对「内核态回调保护」没有任何帮助（ObRegisterCallbacks 在打开句柄时
 /// 就剥掉权限，跟走哪条用户态路径无关），但对少数做了 ntdll inline hook 的软件有效。
 /// 由于这类实现会显著提高安全软件的关注度，默认关闭，由用户在设置里显式开启。
+///
+/// **本文件整块受 MEMSCOPE_ADVANCED 控制**：对外发布的标准构建不包含本类，
+/// 因此发布件里既没有系统调用号解析代码，也没有可执行内存分配与注入相关导入。
 /// </summary>
 internal static class Syscall
 {
@@ -233,10 +238,6 @@ internal static class Syscall
         uint handleAttributes, uint flags, out IntPtr newThreadHandle);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    private delegate int NtDuplicateObjectFn(IntPtr sourceProcess, IntPtr sourceHandle, IntPtr targetProcess,
-        out IntPtr targetHandle, uint desiredAccess, uint attributes, uint options);
-
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate int NtSuspendProcessFn(IntPtr processHandle);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -279,7 +280,7 @@ internal static class Syscall
         var fn = GetDelegate<NtCreateThreadExFn>("NtCreateThreadEx");
         if (fn != null) return fn(out thread, 0x1FFFFF, IntPtr.Zero, process, start, arg, flags,
             IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
-        return NtNative.NtCreateThreadEx(out thread, 0x1FFFFF, IntPtr.Zero, process, start, arg, flags,
+        return InjectionNative.NtCreateThreadEx(out thread, 0x1FFFFF, IntPtr.Zero, process, start, arg, flags,
             IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
     }
 
@@ -287,7 +288,7 @@ internal static class Syscall
     {
         var fn = GetDelegate<NtQueueApcThreadFn>("NtQueueApcThread");
         if (fn != null) return fn(thread, routine, arg1, arg2, arg3);
-        return NtNative.NtQueueApcThread(thread, routine, arg1, arg2, arg3);
+        return InjectionNative.NtQueueApcThread(thread, routine, arg1, arg2, arg3);
     }
 
     public static int GetNextThread(IntPtr process, IntPtr thread, uint access, out IntPtr next)
@@ -322,42 +323,68 @@ internal static class Syscall
         bytesRead = got.ToInt64();
         return st;
     }
+
+    /// <summary>注入相关导入只存在于高级构建，标准构建完全不编译它们。</summary>
+    private static class InjectionNative
+    {
+        [DllImport("ntdll.dll")]
+        public static extern int NtCreateThreadEx(out IntPtr threadHandle, uint desiredAccess, IntPtr objectAttributes,
+            IntPtr processHandle, IntPtr startRoutine, IntPtr argument, uint createFlags, IntPtr zeroBits,
+            IntPtr stackSize, IntPtr maximumStackSize, IntPtr attributeList);
+
+        [DllImport("ntdll.dll")]
+        public static extern int NtQueueApcThread(IntPtr threadHandle, IntPtr apcRoutine, IntPtr arg1, IntPtr arg2, IntPtr arg3);
+    }
 }
 
-/// <summary>syscall 桩不可用时的回退路径（常规 ntdll 导出）。</summary>
-internal static class NtNative
+#else
+
+/// <summary>
+/// 标准构建：不包含直连系统调用层。
+///
+/// 保留同名同签名的门面，使调用方无需改动；所有方法直接落到 ntdll 常规导出
+/// （<see cref="NtNative"/>），行为与常规进程工具一致：不解析系统调用号、
+/// 不申请可执行内存、不构造任何调用桩。
+/// </summary>
+internal static class Syscall
 {
-    [DllImport("ntdll.dll")]
-    public static extern int NtOpenProcess(out IntPtr processHandle, uint desiredAccess, IntPtr objectAttributes, IntPtr clientId);
+    public static bool Ready => false;
 
-    [DllImport("ntdll.dll")]
-    public static extern int NtTerminateProcess(IntPtr processHandle, int exitStatus);
+    public static string StatusMessage { get; private set; } = "标准构建：不含直连系统调用层";
 
-    [DllImport("ntdll.dll")]
-    public static extern int NtQuerySystemInformation(int cls, IntPtr info, int len, out int retLen);
+    public static void Disable(string reason) => StatusMessage = reason;
 
-    [DllImport("ntdll.dll")]
-    public static extern int NtQueryObject(IntPtr handle, int cls, IntPtr info, int len, out int retLen);
+    /// <summary>标准构建无需准备任何东西，保留为空操作。</summary>
+    public static void Initialize() { }
 
-    [DllImport("ntdll.dll")]
-    public static extern int NtCreateThreadEx(out IntPtr threadHandle, uint desiredAccess, IntPtr objectAttributes,
-        IntPtr processHandle, IntPtr startRoutine, IntPtr argument, uint createFlags, IntPtr zeroBits,
-        IntPtr stackSize, IntPtr maximumStackSize, IntPtr attributeList);
+    /// <summary>标准构建没有调用桩，恒返回零。</summary>
+    public static IntPtr Resolve(string name) => IntPtr.Zero;
 
-    [DllImport("ntdll.dll")]
-    public static extern int NtQueueApcThread(IntPtr threadHandle, IntPtr apcRoutine, IntPtr arg1, IntPtr arg2, IntPtr arg3);
+    public static int OpenProcess(out IntPtr handle, uint access, IntPtr objectAttributes, IntPtr clientId)
+        => NtNative.NtOpenProcess(out handle, access, objectAttributes, clientId);
 
-    [DllImport("ntdll.dll")]
-    public static extern int NtGetNextThread(IntPtr processHandle, IntPtr threadHandle, uint desiredAccess,
-        uint handleAttributes, uint flags, out IntPtr newThreadHandle);
+    public static int TerminateProcess(IntPtr handle, int exitStatus)
+        => NtNative.NtTerminateProcess(handle, exitStatus);
 
-    [DllImport("ntdll.dll")]
-    public static extern int NtSuspendProcess(IntPtr processHandle);
+    public static int QuerySystemInformation(int cls, IntPtr info, int len, out int retLen)
+        => NtNative.NtQuerySystemInformation(cls, info, len, out retLen);
 
-    [DllImport("ntdll.dll")]
-    public static extern int NtResumeProcess(IntPtr processHandle);
+    public static int QueryObject(IntPtr handle, int cls, IntPtr info, int len, out int retLen)
+        => NtNative.NtQueryObject(handle, cls, info, len, out retLen);
 
-    [DllImport("ntdll.dll")]
-    public static extern int NtReadVirtualMemory(IntPtr processHandle, IntPtr baseAddress, IntPtr buffer,
-        IntPtr numberOfBytesToRead, out IntPtr numberOfBytesRead);
+    public static int GetNextThread(IntPtr process, IntPtr thread, uint access, out IntPtr next)
+        => NtNative.NtGetNextThread(process, thread, access, 0, 0, out next);
+
+    public static int SuspendProcess(IntPtr process) => NtNative.NtSuspendProcess(process);
+
+    public static int ResumeProcess(IntPtr process) => NtNative.NtResumeProcess(process);
+
+    public static int ReadVirtualMemory(IntPtr process, IntPtr baseAddress, IntPtr buffer, int size, out long bytesRead)
+    {
+        int st = NtNative.NtReadVirtualMemory(process, baseAddress, buffer, (IntPtr)size, out IntPtr got);
+        bytesRead = got.ToInt64();
+        return st;
+    }
 }
+
+#endif

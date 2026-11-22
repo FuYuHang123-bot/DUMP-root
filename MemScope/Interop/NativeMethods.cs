@@ -69,6 +69,8 @@ internal static class Win32
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
     public static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
 
+#if MEMSCOPE_ADVANCED
+    // 仅直连系统调用层用它来放置调用桩；标准构建不编译，发布件里也就没有这几项导入
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern IntPtr VirtualAlloc(IntPtr lpAddress, IntPtr dwSize, uint flAllocationType, uint flProtect);
 
@@ -77,6 +79,7 @@ internal static class Win32
 
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool VirtualProtect(IntPtr lpAddress, IntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
+#endif
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern bool QueryDosDeviceW([MarshalAs(UnmanagedType.LPWStr)] string lpDeviceName,

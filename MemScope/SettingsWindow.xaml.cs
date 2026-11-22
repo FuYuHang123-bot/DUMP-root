@@ -21,7 +21,15 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _origDark = ThemeManager.Dark;
 
+#if MEMSCOPE_ADVANCED
         ChkAdvanced.IsChecked = AppSettings.AdvancedMode;
+#else
+        // 标准构建：开关置灰并说明原因，避免用户以为勾上就生效
+        ChkAdvanced.IsChecked = false;
+        ChkAdvanced.IsEnabled = false;
+        ChkAdvanced.Content = "高级终止（本构建不含直连系统调用与注入路径）";
+        WarningAdvanced.Visibility = Visibility.Collapsed;
+#endif
         ChkFreeze.IsChecked = AppSettings.FreezeOnDump;
         ChkDark.IsChecked = AppSettings.Dark;
         TxtOutputDir.Text = string.IsNullOrWhiteSpace(AppSettings.OutputDir)
@@ -40,7 +48,12 @@ public partial class SettingsWindow : Window
     {
         bool on = ChkAdvanced.IsChecked == true;
 
+#if MEMSCOPE_ADVANCED
         WarningAdvanced.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+#else
+        // 标准构建里开关不可用，警告条始终隐藏（自动化脚本直接改 IsChecked 也不会露出来）
+        WarningAdvanced.Visibility = Visibility.Collapsed;
+#endif
 
         if (on && !Syscall.Ready) Syscall.Initialize();
 

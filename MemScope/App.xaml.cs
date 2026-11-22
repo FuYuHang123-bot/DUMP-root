@@ -20,11 +20,17 @@ public partial class App : Application
         // 直连系统调用只在显式开启「高级终止」时才准备。
         // 未开启时所有调用都走 Win32 / ntdll 标准路径（Syscall.Ready=false 会自然回退），
         // 进程里既不解析系统调用号，也不申请任何可执行内存。
+#if MEMSCOPE_ADVANCED
         bool advanced = AppSettings.AdvancedMode ||
                         e.Args.Any(a => a.Equals("--advanced", StringComparison.OrdinalIgnoreCase));
         AppSettings.AdvancedActive = advanced;
         if (advanced) Syscall.Initialize();
         else Syscall.Disable("高级终止未开启（走标准系统调用）");
+#else
+        // 标准构建不编译直连系统调用层，任何开关都不生效
+        AppSettings.AdvancedActive = false;
+        Syscall.Disable("标准构建：走 Win32 / ntdll 常规调用");
+#endif
 
         // 主题要在窗口构造前就位，否则首帧会先按浅色布局再跳色
         ThemeManager.Apply(AppSettings.Dark);

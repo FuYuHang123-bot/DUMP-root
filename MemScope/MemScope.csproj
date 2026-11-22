@@ -32,4 +32,13 @@
     <Resource Include="Assets\memscope.ico" />
   </ItemGroup>
 
+  <!--
+    高级构建（直连系统调用 + 远程线程/APC）默认不参与编译。
+    要产出完整功能版：dotnet build -c Release -p:EnableAdvanced=true
+    对外发布与 MSI 一律使用标准构建，二进制里不含调用桩、注入导入与可执行内存分配。
+  -->
+  <PropertyGroup Condition="'$(EnableAdvanced)' == 'true'">
+    <DefineConstants>$(DefineConstants);MEMSCOPE_ADVANCED</DefineConstants>
+  </PropertyGroup>
+
 </Project>

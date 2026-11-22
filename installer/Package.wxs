@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MemScope 安装包定义（WiX v4+ 语法，用 WiX 7 构建）
+
+  设计取舍：
+  - 每用户安装（Scope="perUser"）：装到 %LOCALAPPDATA%\Programs\MemScope，
+    安装过程不需要管理员权限。程序清单本身是 asInvoker，"不提权 + 不落 Program Files"
+    能显著降低安装器被安全软件按 dropper 行为拦截的概率。
+  - 框架依赖：只装 4 个文件，运行时由系统的 .NET 10 桌面运行时提供。
+  - 文件清单固定，不含任何额外脚本、服务、驱动或开机自启项。
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Package Name="MemScope 内存与文件实时观测台"
+           Manufacturer="MemScope"
+           Version="1.0.0.0"
+           UpgradeCode="F541D6C1-85C2-4314-9B5A-5CCA7CCF936B"
+           Scope="perUser"
+           Compressed="yes"
+           InstallerVersion="500">
+
+    <SummaryInformation Description="MemScope 进程内存与文件句柄实时观测工具"
+                        Manufacturer="MemScope" />
+
+    <MajorUpgrade DowngradeErrorMessage="已安装更高版本的 MemScope，请先卸载后再安装。" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppIcon" SourceFile="..\MemScope\Assets\memscope.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/FuYuHang123-bot/DUMP-root" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- 每用户安装目录：%LOCALAPPDATA%\Programs\MemScope -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="MemScope" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- 开始菜单：当前用户的程序菜单 -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ShortcutFolder" Name="MemScope" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="MemScope" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+    </Feature>
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+
+      <!-- 主程序：作为快捷方式的 KeyPath -->
+      <Component Id="MainExecutable" Guid="591588C7-E127-442E-8BD2-B4E72CD211CB">
+        <File Id="MemScopeExe" Source="..\dist\MemScope\MemScope.exe" KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut"
+                    Directory="ShortcutFolder"
+                    Name="MemScope"
+                    Description="进程内存与文件句柄实时观测"
+                    Advertise="yes" />
+        </File>
+      </Component>
+
+      <!-- 程序集与运行时配置 -->
+      <Component Id="SupportFiles" Guid="FEDD2CD1-6014-4FE4-89C0-D9DBF1A6D8C6">
+        <File Id="MemScopeDll" Source="..\dist\MemScope\MemScope.dll" />
+        <File Id="DepsJson" Source="..\dist\MemScope\MemScope.deps.json" />
+        <File Id="RuntimeConfig" Source="..\dist\MemScope\MemScope.runtimeconfig.json" />
+      </Component>
+
+    </ComponentGroup>
+
+  </Package>
+</Wix>

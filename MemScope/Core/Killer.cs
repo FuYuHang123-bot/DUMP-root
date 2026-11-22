@@ -162,6 +162,7 @@ internal static class Killer
 
         bool advanced = AppSettings.AdvancedActive;
 
+#if MEMSCOPE_ADVANCED
         // ---- L1：直连系统调用（仅高级模式）----
         if (!advanced)
         {
@@ -204,6 +205,14 @@ internal static class Killer
                 return stages;
             }
         }
+#else
+        stages.Add(new KillStage
+        {
+            Name = "L1 直连 syscall",
+            Skipped = true,
+            Detail = "标准构建不含直连系统调用层，直接从 L2 常规 API 开始"
+        });
+#endif
 
         // ---- L2：常规 API ----
         IntPtr h2 = Win32.OpenProcess(Win32.PROCESS_TERMINATE, false, pid);
@@ -235,6 +244,7 @@ internal static class Killer
             stages.Add(new KillStage { Name = "L3 远程线程退出", Skipped = true, Detail = "标准模式下不启用" });
             stages.Add(new KillStage { Name = "L4 线程 APC 投递", Skipped = true, Detail = "标准模式下不启用" });
         }
+#if MEMSCOPE_ADVANCED
         else
         {
             IntPtr remoteExit = RemoteExitRoutine();
@@ -309,6 +319,7 @@ internal static class Killer
                 }
             }
         }
+#endif
 
         stages.Add(new KillStage
         {
@@ -323,6 +334,7 @@ internal static class Killer
         return stages;
     }
 
+#if MEMSCOPE_ADVANCED
     /// <summary>目标进程内 RtlExitUserProcess 地址（ntdll 由 KnownDlls 共享映射，跨进程同址）。</summary>
     private static IntPtr RemoteExitRoutine()
     {
@@ -340,6 +352,7 @@ internal static class Killer
         }
         return IntPtr.Zero;
     }
+#endif
 
     /// <summary>结束整个进程树（先子后父）。</summary>
     public static async Task<List<string>> ForceKillTreeAsync(int rootPid, Func<int, string> nameOf, Action<string> log)
